@@ -1,0 +1,23 @@
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+
+# ── Java / Maven ──────────────────────────────────────────────────────────────
+drone-ingestion/target/
+drone-ingestion/data/
+*.class
+*.jar
+!drone-ingestion/target/drone-analytics.jar
+
+# ── Node / Vite ───────────────────────────────────────────────────────────────
+drone-dashboard/node_modules/
+drone-dashboard/dist/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

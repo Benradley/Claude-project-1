@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"C:\\\\Users\\\\Ben\\\\Downloads\\\\claude project 1\\\\drone-ingestion\\\\src\\\\main\\\\java\\\\com\\\\droneanalytics\\\\ingestion\\\\model\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Ben\\\\Downloads\\\\claude project 1\\\\drone-ingestion\\\\src\\\\main\\\\java\\\\com\\\\droneanalytics\\\\ingestion\\\\parser\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Ben\\\\Downloads\\\\claude project 1\\\\drone-ingestion\\\\src\\\\test\\\\java\\\\com\\\\droneanalytics\\\\ingestion\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Ben\\\\Downloads\\\\claude project 1\\\\drone-ingestion\\\\src\\\\test\\\\resources\")",
+      "Bash(mvn test:*)",
+      "Bash(del \"C:\\\\Users\\\\Ben\\\\Downloads\\\\claude project 1\\\\drone-ingestion\\\\src\\\\test\\\\java\\\\com\\\\droneanalytics\\\\reporting\\\\PdfDirectTest.java\")"
+    ]
+  }
+}
