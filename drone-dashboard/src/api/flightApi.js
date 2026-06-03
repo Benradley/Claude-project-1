@@ -82,6 +82,18 @@ export async function downloadPdf(file) {
 }
 
 /**
+ * Runs the built-in DJI demo flight through the analytics pipeline.
+ * No file upload required — the backend generates the telemetry directly.
+ */
+export async function fetchDemoReport() {
+  const res = await fetch(`${BASE}/flights/demo`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error(`Demo failed: ${res.status}`)
+  return res.json()
+}
+
+/**
  * Fetches the paginated flight history for the authenticated user.
  */
 export async function fetchHistory(page = 0, size = 20) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { isLoggedIn, getUser, clearAuth } from './api/authApi'
-import { analyzeFile } from './api/flightApi'
+import { analyzeFile, fetchDemoReport } from './api/flightApi'
 import AuthPage        from './components/AuthPage'
 import UploadPanel     from './components/UploadPanel'
 import FlightDashboard from './components/FlightDashboard'
@@ -73,6 +73,24 @@ export default function App() {
     }
   }
 
+  // Load the built-in DJI demo flight (no file upload needed)
+  async function handleDemo() {
+    setPage('loading')
+    setError(null)
+    setProgress(0)
+    setShowHistory(false)
+    try {
+      const data = await fetchDemoReport()
+      setReport(data)
+      setFile({ name: 'demo_dji_flight.txt' })
+      setPage('dashboard')
+    } catch (err) {
+      // Demo errors never invalidate the session — just show the error banner
+      setError('Demo unavailable: ' + err.message)
+      setPage('error')
+    }
+  }
+
   function handleReset() {
     setPage('upload')
     setReport(null)
@@ -129,6 +147,7 @@ export default function App() {
         <div className="upload-main">
           <UploadPanel
             onAnalyze={handleAnalyze}
+            onDemo={handleDemo}
             loading={page === 'loading'}
             uploadProgress={progress}
           />

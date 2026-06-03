@@ -6,6 +6,7 @@ import com.droneanalytics.api.dto.AnalysisReportDto;
 import com.droneanalytics.api.dto.FlightSessionDto;
 import com.droneanalytics.entity.FlightSession;
 import com.droneanalytics.ingestion.FlightLogIngestionService;
+import com.droneanalytics.ingestion.model.DroneType;
 import com.droneanalytics.ingestion.model.TelemetryPoint;
 import com.droneanalytics.notification.NotificationService;
 import com.droneanalytics.reporting.ReportExporter;
@@ -19,6 +20,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +66,95 @@ public class FlightController {
     @GetMapping("/health")
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("Drone Analytics API is running");
+    }
+
+    // ── Demo ──────────────────────────────────────────────────────────────────
+
+    /**
+     * Returns a pre-computed analysis report for the built-in DJI demo flight
+     * (60-second circular orbit over San Francisco, no file upload required).
+     * Saves a session for the authenticated user just like a real upload.
+     */
+    @GetMapping("/flights/demo")
+    public ResponseEntity<?> demo(@AuthenticationPrincipal UserDetails principal) {
+        try {
+            List<TelemetryPoint> points = buildDemoPoints();
+            AnalysisReport report = analyticsEngine.analyze(points);
+            AnalysisReportDto dto  = AnalysisReportDto.from(report, points);
+
+            notificationService.processReport(report, "demo_dji_flight.txt");
+
+            if (principal != null) {
+                try {
+                    long sessionId = sessionService.save(
+                        principal.getUsername(), "demo_dji_flight.txt", dto);
+                    if (sessionId > 0) dto.sessionId = sessionId;
+                } catch (Exception e) {
+                    log.warn("Demo session save failed (non-fatal): {}", e.getMessage());
+                }
+            }
+
+            return ResponseEntity.ok(dto);
+        } catch (Exception e) {
+            log.error("Demo generation failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Demo unavailable: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Generates 60 TelemetryPoints representing the built-in demo flight:
+     *   Origin: 37.7749, -122.4194 (San Francisco)
+     *   Phase 1 (0-15s):  climb from 0 to 50 m AGL
+     *   Phase 2 (15-45s): circular orbit at 50 m, radius ~22 m, speed 5 m/s
+     *   Phase 3 (45-60s): descend from 50 m to 0
+     *   Battery: 95 % → 80 % linear drain
+     */
+    private static List<TelemetryPoint> buildDemoPoints() {
+        final double BASE_LAT     = 37.7749;
+        final double BASE_LON     = -122.4194;
+        final double BASE_MSL     = 100.0;
+        final double ORBIT_RADIUS = 0.0002;   // ~22 m in degrees
+        final long   BASE_TIME_MS = 1_700_000_000_000L;
+
+        List<TelemetryPoint> pts = new ArrayList<>(60);
+        for (int t = 0; t < 60; t++) {
+            double altAgl;
+            if      (t < 15) altAgl = (t / 15.0) * 50.0;
+            else if (t < 45) altAgl = 50.0;
+            else             altAgl = 50.0 * (1.0 - (t - 45.0) / 15.0);
+
+            boolean orbiting   = (t >= 15 && t <= 45);
+            double  orbitAngle = orbiting ? 2 * Math.PI * (t - 15) / 30.0 : 0.0;
+            double  lat        = BASE_LAT + ORBIT_RADIUS * Math.cos(orbitAngle);
+            double  lon        = BASE_LON + ORBIT_RADIUS * Math.sin(orbitAngle);
+            double  heading    = orbiting
+                ? ((Math.toDegrees(orbitAngle + Math.PI / 2) % 360) + 360) % 360
+                : 0.0;
+            double  speed      = orbiting ? 5.0 : 0.5;
+            double  battPct    = 95.0 - (t / 60.0) * 15.0;
+            double  battV      = 12.5 - (t / 60.0) * 0.8;
+            String  mode       = t < 15 ? "TAKEOFF" : t < 45 ? "GPS" : "LAND";
+
+            TelemetryPoint p = new TelemetryPoint();
+            p.setTimestampMs(BASE_TIME_MS + (long) t * 1000);
+            p.setLatitude(lat);
+            p.setLongitude(lon);
+            p.setAltitudeAgl(altAgl);
+            p.setAltitudeMsl(BASE_MSL + altAgl);
+            p.setGroundSpeed(speed);
+            p.setVelocityNorth(orbiting ? -speed * Math.sin(orbitAngle) : 0);
+            p.setVelocityEast (orbiting ?  speed * Math.cos(orbitAngle) : 0);
+            p.setVelocityDown (t < 15 ? -50.0 / 15.0 : t > 45 ? 50.0 / 15.0 : 0);
+            p.setHeadingDeg(heading);
+            p.setBatteryPercent(battPct);
+            p.setBatteryVoltage(battV);
+            p.setFlightMode(mode);
+            p.setDroneType(DroneType.DJI);
+            p.setHasGpsFix(true);
+            pts.add(p);
+        }
+        return pts;
     }
 
     // ── Analyze ───────────────────────────────────────────────────────────────

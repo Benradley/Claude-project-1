@@ -1,0 +1,135 @@
+name: Deploy to AWS
+
+# Triggered automatically on every push to main.
+#
+# One-time setup — add these GitHub Secrets (repo Settings → Secrets → Actions):
+#
+#   AWS_ACCESS_KEY_ID          IAM user access key  (see DEPLOY_GUIDE.md Step 2)
+#   AWS_SECRET_ACCESS_KEY      IAM user secret key
+#   AWS_REGION                 e.g.  us-east-1
+#   S3_BUCKET_NAME             Frontend S3 bucket   (e.g. drone-analytics-frontend)
+#   CLOUDFRONT_DISTRIBUTION_ID CloudFront ID        (e.g. E1A2B3C4D5E6F7)
+#   EB_DEPLOY_BUCKET           S3 bucket for EB artefacts  (e.g. drone-analytics-deploy)
+#   EB_APP_NAME                Elastic Beanstalk application name
+#   EB_ENV_NAME                Elastic Beanstalk environment name
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+
+  # ── 1. React SPA → S3 + CloudFront invalidation ───────────────────────────
+  deploy-frontend:
+    name: Frontend → S3 + CloudFront
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: drone-dashboard/package-lock.json
+
+      - name: Install dependencies
+        working-directory: drone-dashboard
+        run: npm ci
+
+      - name: Build React app
+        working-directory: drone-dashboard
+        run: npm run build
+        # vite.config.js base is '/' — matches CloudFront distribution root.
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      # Vite fingerprints every asset (main.a1b2c3.js etc.) so they can be
+      # cached permanently.  index.html is NOT fingerprinted and must always
+      # be re-fetched so browsers pick up new asset filenames.
+      - name: Upload fingerprinted assets (1-year cache)
+        run: |
+          aws s3 sync drone-dashboard/dist/ \
+            s3://${{ secrets.S3_BUCKET_NAME }}/ \
+            --delete \
+            --exclude "index.html" \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload index.html (no-cache)
+        run: |
+          aws s3 cp drone-dashboard/dist/index.html \
+            s3://${{ secrets.S3_BUCKET_NAME }}/index.html \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type "text/html"
+
+      - name: Invalidate CloudFront edge cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+
+  # ── 2. Spring Boot JAR + Procfile → Elastic Beanstalk ────────────────────
+  deploy-backend:
+    name: Backend → Elastic Beanstalk
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build Spring Boot JAR (tests skipped — ci.yml runs them)
+        working-directory: drone-ingestion
+        run: mvn package -DskipTests
+
+      # EB Java SE platform expects a ZIP containing:
+      #   drone-analytics.jar  — the fat JAR
+      #   Procfile             — startup command (port 5000, prod profile)
+      - name: Package JAR + Procfile into deploy bundle
+        run: |
+          cd drone-ingestion
+          zip ../deploy-bundle.zip \
+            target/drone-analytics.jar \
+            Procfile
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      - name: Upload deploy bundle to S3
+        run: |
+          aws s3 cp deploy-bundle.zip \
+            s3://${{ secrets.EB_DEPLOY_BUCKET }}/drone-analytics-${{ github.sha }}.zip
+
+      - name: Create Elastic Beanstalk application version
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name "${{ secrets.EB_APP_NAME }}" \
+            --version-label "v-${{ github.sha }}" \
+            --source-bundle \
+              S3Bucket="${{ secrets.EB_DEPLOY_BUCKET }}",S3Key="drone-analytics-${{ github.sha }}.zip"
+
+      - name: Deploy version to EB environment
+        run: |
+          aws elasticbeanstalk update-environment \
+            --environment-name "${{ secrets.EB_ENV_NAME }}" \
+            --version-label "v-${{ github.sha }}"
+
+      - name: Wait for deployment to complete
+        run: |
+          aws elasticbeanstalk wait environment-updated \
+            --environment-name "${{ secrets.EB_ENV_NAME }}"

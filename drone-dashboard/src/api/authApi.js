@@ -42,27 +42,49 @@ export function isLoggedIn() {
   }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Safely parse a response as JSON.
+ * Returns {} for empty bodies so callers never see a raw JSON parse error.
+ */
+async function safeJson(res) {
+  const text = await res.text()
+  if (!text || !text.trim()) return {}
+  try { return JSON.parse(text) } catch { return {} }
+}
+
 // ── Auth requests ─────────────────────────────────────────────────────────────
 
 export async function register(email, password, displayName) {
-  const res = await fetch(`${BASE}/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, displayName }),
-  })
-  const data = await res.json()
+  let res
+  try {
+    res = await fetch(`${BASE}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, displayName }),
+    })
+  } catch {
+    throw new Error('Cannot reach the server — is the backend running?')
+  }
+  const data = await safeJson(res)
   if (!res.ok) throw new Error(data.message || `Registration failed (${res.status})`)
   saveAuth(data)
   return data
 }
 
 export async function login(email, password) {
-  const res = await fetch(`${BASE}/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  })
-  const data = await res.json()
+  let res
+  try {
+    res = await fetch(`${BASE}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+  } catch {
+    throw new Error('Cannot reach the server — is the backend running?')
+  }
+  const data = await safeJson(res)
   if (!res.ok) throw new Error(data.message || 'Invalid email or password')
   saveAuth(data)
   return data
@@ -73,5 +95,5 @@ export async function fetchProfile() {
     headers: { Authorization: `Bearer ${getToken()}` },
   })
   if (!res.ok) throw new Error('Session expired — please log in again')
-  return res.json()
+  return safeJson(res)
 }

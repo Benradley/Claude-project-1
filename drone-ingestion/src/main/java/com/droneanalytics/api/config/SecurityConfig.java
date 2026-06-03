@@ -23,6 +23,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *
  * Public endpoints:
  *   GET  /api/health
+ *   GET  /api/flights/demo
  *   POST /api/auth/register
  *   POST /api/auth/login
  *
@@ -62,6 +63,7 @@ public class SecurityConfig {
             // Authorization rules
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET,  "/api/health").permitAll()
+                .requestMatchers(HttpMethod.GET,  "/api/flights/demo").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .anyRequest().authenticated()

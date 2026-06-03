@@ -13,7 +13,7 @@ const FORMAT_LABELS = {
  * Drag-and-drop / click-to-browse file upload panel.
  * Calls onAnalyze(file) when the user submits.
  */
-export default function UploadPanel({ onAnalyze, loading, uploadProgress }) {
+export default function UploadPanel({ onAnalyze, onDemo, loading, uploadProgress }) {
   const [file, setFile]       = useState(null)
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef()
@@ -117,6 +117,36 @@ export default function UploadPanel({ onAnalyze, loading, uploadProgress }) {
           )}
         </button>
       </form>
+
+      {/* Demo divider */}
+      <div className="demo-divider">
+        <span>or try the built-in demo</span>
+      </div>
+
+      {/* DJI demo card */}
+      <button
+        className="demo-card"
+        onClick={onDemo}
+        disabled={loading}
+        type="button"
+      >
+        <div className="demo-card-icon">🛸</div>
+        <div className="demo-card-body">
+          <div className="demo-card-title">DJI Mavic — Sample Flight</div>
+          <div className="demo-card-meta">
+            San Francisco · 60 s · 50 m altitude · circular orbit
+          </div>
+          <div className="demo-card-tags">
+            <span className="badge badge-format">DJI</span>
+            <span className="badge badge-ok">GPS</span>
+            <span className="demo-tag">Battery regression</span>
+            <span className="demo-tag">Airspace risk</span>
+          </div>
+        </div>
+        <div className="demo-card-cta">
+          {loading ? <span className="spinner" style={{ borderTopColor: 'var(--accent)' }} /> : '▶ Load'}
+        </div>
+      </button>
     </div>
   )
 }
