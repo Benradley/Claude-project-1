@@ -93,15 +93,16 @@ jobs:
         working-directory: drone-ingestion
         run: mvn package -DskipTests
 
-      # EB Java SE platform expects a ZIP containing:
-      #   drone-analytics.jar  — the fat JAR
+      # EB Java SE platform expects a ZIP with both files at the ROOT level:
+      #   drone-analytics.jar  — the fat JAR  (Procfile references it by name)
       #   Procfile             — startup command (port 5000, prod profile)
+      # We stage them in a temp directory so the zip has no path prefixes.
       - name: Package JAR + Procfile into deploy bundle
         run: |
-          cd drone-ingestion
-          zip ../deploy-bundle.zip \
-            target/drone-analytics.jar \
-            Procfile
+          mkdir eb-bundle
+          cp drone-ingestion/target/drone-analytics.jar eb-bundle/drone-analytics.jar
+          cp drone-ingestion/Procfile eb-bundle/Procfile
+          cd eb-bundle && zip ../deploy-bundle.zip drone-analytics.jar Procfile
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -113,21 +114,21 @@ jobs:
       - name: Upload deploy bundle to S3
         run: |
           aws s3 cp deploy-bundle.zip \
-            s3://${{ secrets.EB_DEPLOY_BUCKET }}/drone-analytics-${{ github.sha }}.zip
+            s3://${{ secrets.EB_DEPLOY_BUCKET }}/drone-analytics-${{ github.sha }}-${{ github.run_attempt }}.zip
 
       - name: Create Elastic Beanstalk application version
         run: |
           aws elasticbeanstalk create-application-version \
             --application-name "${{ secrets.EB_APP_NAME }}" \
-            --version-label "v-${{ github.sha }}" \
+            --version-label "v-${{ github.sha }}-${{ github.run_attempt }}" \
             --source-bundle \
-              S3Bucket="${{ secrets.EB_DEPLOY_BUCKET }}",S3Key="drone-analytics-${{ github.sha }}.zip"
+              S3Bucket="${{ secrets.EB_DEPLOY_BUCKET }}",S3Key="drone-analytics-${{ github.sha }}-${{ github.run_attempt }}.zip"
 
       - name: Deploy version to EB environment
         run: |
           aws elasticbeanstalk update-environment \
             --environment-name "${{ secrets.EB_ENV_NAME }}" \
-            --version-label "v-${{ github.sha }}"
+            --version-label "v-${{ github.sha }}-${{ github.run_attempt }}"
 
       - name: Wait for deployment to complete
         run: |
