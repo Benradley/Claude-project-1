@@ -22,7 +22,7 @@ CREATE TABLE flight_sessions (
     user_id          BIGINT       NOT NULL,
     filename         VARCHAR(255) NOT NULL,
     uploaded_at      TIMESTAMP    NOT NULL,
-    report_json      CLOB         NOT NULL,
+    report_json      TEXT         NOT NULL,
     drone_type       VARCHAR(50),
     healthy          BOOLEAN      NOT NULL DEFAULT FALSE,
     duration_seconds DOUBLE,
