@@ -35,8 +35,7 @@ public class FlightSession {
     private Instant uploadedAt;
 
     /** Serialised AnalysisReportDto JSON (includes telemetry array). */
-    @Lob
-    @Column(name = "report_json", nullable = false)
+    @Column(name = "report_json", nullable = false, columnDefinition = "TEXT")
     private String reportJson;
 
     // ── Denormalised summary fields ──────────────────────────────────────────
